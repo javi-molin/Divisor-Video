@@ -117,9 +117,10 @@ progress {
   margin-top: 12px;
   font-size: 11px;
   color: var(--muted);
-  max-height: 100px;
+  max-height: 120px;
   overflow-y: auto;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .part {
@@ -203,11 +204,19 @@ procesan localmente y no se envían a ningún servidor.
 
 <script type="module">
 
+// ------------------------------------
+// IMPORTAR LIBRERÍAS
+// ------------------------------------
+
 import { FFmpeg } from
 "https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js";
 
 import { fetchFile } from
 "https://unpkg.com/@ffmpeg/util@0.12.2/dist/esm/index.js";
+
+// ------------------------------------
+// CONFIGURACIÓN
+// ------------------------------------
 
 const $ = id => document.getElementById(id);
 
@@ -215,17 +224,16 @@ const PACKAGE =
 "https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/esm/";
 
 const CORE =
-"https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd/";
+"https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/";
 
 let ffmpeg = null;
 let selectedFile = null;
 let duration = 0;
 let busy = false;
 let loading = false;
+
 let outputURLs = [];
 let workerBlobURL = null;
-let coreBlobURL = null;
-let wasmBlobURL = null;
 
 // ------------------------------------
 // INTERFAZ Y PROGRESO
@@ -263,74 +271,28 @@ function log(message) {
   $("log").scrollTop = $("log").scrollHeight;
 }
 
+function getErrorMessage(error) {
+
+  if (error instanceof Error) {
+    return error.message || error.stack || String(error);
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+}
+
 function formatTime(seconds) {
 
   const s = Math.floor(seconds);
 
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-}
-
-// ------------------------------------
-// DESCARGA CON PROGRESO REAL
-// ------------------------------------
-
-async function downloadBlob(url, type, start, end, label) {
-
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error(
-      `No se pudo descargar ${label}: HTTP ${response.status}`
-    );
-  }
-
-  const total = Number(
-    response.headers.get("Content-Length")
-  );
-
-  if (!response.body) {
-    throw new Error(
-      "Safari no pudo iniciar la descarga de " + label
-    );
-  }
-
-  const reader = response.body.getReader();
-
-  const chunks = [];
-  let received = 0;
-
-  while (true) {
-
-    const { done, value } = await reader.read();
-
-    if (done) break;
-
-    chunks.push(value);
-    received += value.length;
-
-    if (total > 0) {
-
-      const ratio = received / total;
-
-      setProgress(
-        start + ratio * (end - start),
-        "Etapa 1 · Descargando FFmpeg",
-        `${label}: ${(received / 1024 / 1024).toFixed(1)} MB de ${(total / 1024 / 1024).toFixed(1)} MB`
-      );
-
-    } else {
-
-      setLoading(
-        "Etapa 1 · Descargando FFmpeg",
-        `${label}: ${(received / 1024 / 1024).toFixed(1)} MB descargados`
-      );
-
-    }
-  }
-
-  return URL.createObjectURL(
-    new Blob(chunks, { type })
-  );
 }
 
 // ------------------------------------
@@ -349,13 +311,16 @@ async function createLocalWorker() {
   );
 
   if (!response.ok) {
-    throw new Error("No se pudo descargar worker.js");
+    throw new Error(
+      `No se pudo descargar worker.js: HTTP ${response.status}`
+    );
   }
 
   let source = await response.text();
 
-  // Reescribir las importaciones relativas del Worker
-  // para que apunten al paquete oficial.
+  // Reescribir importaciones relativas para que
+  // apunten al paquete oficial.
+
   source = source.replace(
     /((?:from|import)\s*)["']\.\/([^"']+)["']/g,
     (_, prefix, filename) =>
@@ -370,7 +335,6 @@ async function createLocalWorker() {
   workerBlobURL = URL.createObjectURL(blob);
 
   log("Worker preparado en una dirección local.");
-
 }
 
 // ------------------------------------
@@ -393,29 +357,23 @@ async function loadFFmpeg() {
 
     log("Comenzando carga de FFmpeg.");
 
+    // 1. Preparar Worker local
+
     await createLocalWorker();
 
+    // 2. Preparar núcleo ESM
+
     setProgress(
-      5,
-      "Etapa 1 · Descargando FFmpeg",
-      "Descargando motor principal..."
+      80,
+      "Etapa 1 · Preparando motor",
+      "Conectando con el núcleo de FFmpeg..."
     );
 
-    coreBlobURL = await downloadBlob(
-      CORE + "ffmpeg-core.js",
-      "text/javascript",
-      5,
-      15,
-      "Motor JavaScript"
-    );
+    log("Utilizando núcleo ESM de FFmpeg.");
 
-    wasmBlobURL = await downloadBlob(
-      CORE + "ffmpeg-core.wasm",
-      "application/wasm",
-      15,
-      85,
-      "Motor WebAssembly"
-    );
+    log("Origen del núcleo: " + CORE);
+
+    // 3. Inicializar FFmpeg
 
     setProgress(
       88,
@@ -427,17 +385,22 @@ async function loadFFmpeg() {
 
     ffmpeg.on("log", ({ message }) => {
 
-      if (message) log(message);
+      if (message) {
+        log(message);
+      }
 
     });
+
+    // Cargar directamente los archivos ESM.
+    // Evitamos crear Blob URLs para el núcleo.
 
     await ffmpeg.load({
 
       classWorkerURL: workerBlobURL,
 
-      coreURL: coreBlobURL,
+      coreURL: CORE + "ffmpeg-core.js",
 
-      wasmURL: wasmBlobURL
+      wasmURL: CORE + "ffmpeg-core.wasm"
 
     });
 
@@ -448,6 +411,16 @@ async function loadFFmpeg() {
     );
 
     log("FFmpeg inicializado correctamente.");
+
+  } catch (error) {
+
+    ffmpeg = null;
+
+    const message = getErrorMessage(error);
+
+    log("ERROR AL CARGAR FFMPEG: " + message);
+
+    throw error;
 
   } finally {
 
@@ -525,12 +498,14 @@ $("retry").addEventListener("click", async () => {
 
   } catch (error) {
 
+    const message = getErrorMessage(error);
+
     $("status").textContent =
-      "Error al cargar FFmpeg:\n" + error.message;
+      "Error al cargar FFmpeg:\n" + message;
 
     $("retry").style.display = "block";
 
-    log(error.message);
+    log("ERROR: " + message);
 
   }
 
@@ -552,6 +527,7 @@ $("cut").addEventListener("click", async () => {
   $("retry").style.display = "none";
 
   // Liberar enlaces de resultados anteriores
+
   outputURLs.forEach(url => URL.revokeObjectURL(url));
   outputURLs = [];
 
@@ -561,9 +537,11 @@ $("cut").addEventListener("click", async () => {
   try {
 
     // 1. Cargar procesador
+
     await loadFFmpeg();
 
     // 2. Preparar archivo
+
     setProgress(
       0,
       "Etapa 2 · Preparando video",
@@ -588,7 +566,8 @@ $("cut").addEventListener("click", async () => {
 
     log("Archivo cargado en FFmpeg.");
 
-    // 3. Dividir
+    // 3. Dividir en segmentos de 60 segundos
+
     const total = Math.ceil(duration / 60);
 
     const parts = [];
@@ -614,7 +593,8 @@ $("cut").addEventListener("click", async () => {
         `Procesando desde ${formatTime(start)} · Duración ${formatTime(length)}`
       );
 
-      // Buscar progreso de codificación
+      // Progreso de codificación
+
       const progressHandler = ({ progress }) => {
 
         if (!Number.isFinite(progress)) return;
@@ -705,10 +685,12 @@ $("cut").addEventListener("click", async () => {
 
     }
 
-    // 4. Liberar archivo original de la memoria virtual
+    // 4. Liberar archivo original de memoria
+
     await ffmpeg.deleteFile(input);
 
     // 5. Mostrar descargas
+
     setProgress(
       100,
       "Etapa 4 · Finalizado",
@@ -749,16 +731,17 @@ $("cut").addEventListener("click", async () => {
 
     console.error(error);
 
+    const message = getErrorMessage(error);
+
     $("status").textContent =
-      "Ocurrió un error:\n" +
-      (error.message || String(error));
+      "Ocurrió un error:\n" + message;
 
     $("stage").textContent =
       "Proceso interrumpido";
 
     $("retry").style.display = "block";
 
-    log("ERROR: " + error.message);
+    log("ERROR: " + message);
 
   } finally {
 
@@ -781,14 +764,6 @@ window.addEventListener("pagehide", () => {
 
   if (workerBlobURL) {
     URL.revokeObjectURL(workerBlobURL);
-  }
-
-  if (coreBlobURL) {
-    URL.revokeObjectURL(coreBlobURL);
-  }
-
-  if (wasmBlobURL) {
-    URL.revokeObjectURL(wasmBlobURL);
   }
 
 });
