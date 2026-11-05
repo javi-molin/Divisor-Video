@@ -7,175 +7,130 @@
 <title>Cortador de historias</title>
 
 <style>
-:root {
-  --bg: #111116;
-  --card: #1d1d25;
-  --text: #f5f5f7;
-  --muted: #a5a5b2;
-  --accent: #b9a0ff;
-  --border: #353541;
-}
-
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
   padding: 24px 16px;
-  background: var(--bg);
-  color: var(--text);
+  background: #111116;
+  color: #f5f5f7;
   font-family: system-ui, sans-serif;
 }
 
-main {
-  max-width: 600px;
-  margin: auto;
-}
+main { max-width: 600px; margin: auto; }
 
-h1 { font-size: 27px; margin-bottom: 8px; }
+h1 { font-size: 26px; }
 
-p { color: var(--muted); line-height: 1.5; }
+p { color: #aaaab8; line-height: 1.5; }
 
 .card {
-  background: var(--card);
-  border: 1px solid var(--border);
+  background: #1d1d25;
+  border: 1px solid #353541;
   border-radius: 18px;
   padding: 20px;
   margin-top: 20px;
 }
 
-input[type="file"] {
+input[type=file] {
   width: 100%;
   margin: 18px 0;
 }
 
 button {
-  background: var(--accent);
+  background: #b9a0ff;
   color: #17121f;
   border: 0;
-  padding: 13px 18px;
+  padding: 14px 18px;
   border-radius: 12px;
   font-weight: 700;
   font-size: 15px;
   cursor: pointer;
 }
 
-button:disabled {
-  opacity: .4;
-  cursor: not-allowed;
-}
+button:disabled { opacity: .4; }
 
-.video {
+progress {
   width: 100%;
-  border-radius: 12px;
-  margin-top: 12px;
-  background: black;
+  height: 12px;
+  margin-top: 14px;
+  accent-color: #b9a0ff;
 }
 
 #status {
-  margin-top: 18px;
+  margin-top: 15px;
   font-size: 14px;
   white-space: pre-wrap;
 }
 
 #stage {
-  color: var(--accent);
+  color: #b9a0ff;
   font-size: 13px;
-  margin-top: 14px;
-}
-
-progress {
-  width: 100%;
-  height: 12px;
   margin-top: 12px;
-  accent-color: var(--accent);
-}
-
-progress:indeterminate {
-  appearance: none;
-  background: #33333f;
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-progress:indeterminate::-webkit-progress-bar {
-  background: #33333f;
-}
-
-progress:indeterminate::-webkit-progress-value {
-  background: var(--accent);
 }
 
 #percent {
   display: block;
   text-align: right;
   font-size: 14px;
-  font-weight: bold;
-  margin-top: 6px;
+  margin-top: 5px;
+}
+
+video {
+  width: 100%;
+  border-radius: 12px;
+  margin-top: 12px;
 }
 
 .part {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid #353541;
   padding: 16px 0;
 }
 
-.part strong { display: block; margin-bottom: 8px; }
-
 .part a {
-  color: var(--accent);
+  color: #b9a0ff;
   display: inline-block;
   margin-top: 10px;
 }
 
 .small { font-size: 12px; }
-
-#log {
-  color: var(--muted);
-  font-size: 12px;
-  margin-top: 12px;
-  max-height: 120px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-}
 </style>
 </head>
 
 <body>
 <main>
-  <h1>✂️ Cortador de historias</h1>
-  <p>
-    Divide videos largos en clips de 1 minuto, sin perder escenas
-    ni repetir contenido. Todo se procesa en tu dispositivo.
-  </p>
+<h1>✂️ Cortador de historias</h1>
 
-  <section class="card">
-    <label for="video"><strong>Selecciona tu video</strong></label>
-    <input id="video" type="file" accept="video/*">
+<p>
+Divide videos largos en clips de un minuto, sin repetir ni
+perder escenas. Todo se procesa en tu dispositivo.
+</p>
 
-    <video id="preview" class="video" controls hidden></video>
+<section class="card">
+  <label for="video"><strong>Selecciona tu video</strong></label>
+  <input id="video" type="file" accept="video/*">
 
-    <p id="duration"></p>
+  <video id="preview" controls hidden></video>
+  <p id="duration"></p>
 
-    <button id="cut" disabled>Dividir video</button>
+  <button id="cut" disabled>Dividir video</button>
+  <button id="retry" hidden>Reintentar carga</button>
 
-    <div id="stage"></div>
-    <progress id="progress" value="0" max="100" hidden></progress>
-    <span id="percent"></span>
+  <div id="stage"></div>
+  <progress id="progress" value="0" max="100" hidden></progress>
+  <span id="percent"></span>
+  <div id="status"></div>
+</section>
 
-    <div id="status"></div>
-    <div id="log"></div>
-  </section>
+<section id="results" class="card" hidden>
+  <h2>Videos listos</h2>
+  <p id="summary"></p>
+  <div id="parts"></div>
+</section>
 
-  <section id="results" class="card" hidden>
-    <h2>Videos listos</h2>
-    <p id="summary"></p>
-    <button id="downloadAll">Descargar todas las partes (ZIP)</button>
-    <div id="parts"></div>
-  </section>
-
-  <p class="small">
-    Mantén esta página abierta mientras se procesan los videos.
-    El tiempo depende del tamaño del archivo y de tu dispositivo.
-  </p>
+<p class="small">
+Mantén Safari abierto durante el procesamiento. Si el video es
+muy largo, prueba dividirlo en tramos más pequeños.
+</p>
 </main>
 
 <script type="module">
@@ -185,57 +140,77 @@ import { FFmpeg } from
 import { fetchFile, toBlobURL } from
   "https://unpkg.com/@ffmpeg/util@0.12.2/dist/esm/index.js";
 
-import JSZip from
-  "https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm";
-
 const $ = id => document.getElementById(id);
 
-const ffmpeg = new FFmpeg();
-
-let selectedFile = null;
+let ffmpeg;
+let selectedFile;
 let duration = 0;
-let parts = [];
-let currentTask = null;
+let loading = false;
+let busy = false;
 
-const formatTime = seconds => {
+function status(message, stage, percent = null) {
+  $("status").textContent = message;
+  $("stage").textContent = stage;
+
+  $("progress").hidden = false;
+
+  if (percent === null) {
+    $("progress").removeAttribute("value");
+    $("percent").textContent = "Preparando...";
+  } else {
+    $("progress").value = percent;
+    $("percent").textContent = Math.round(percent) + "%";
+  }
+}
+
+function formatTime(seconds) {
   const s = Math.floor(seconds);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-};
-
-function updateProgress(value, message, stage) {
-  const percent = Math.max(0, Math.min(100, value));
-
-  $("progress").hidden = false;
-  $("progress").removeAttribute("value");
-  $("progress").value = percent;
-
-  $("percent").textContent = `${Math.round(percent)}%`;
-  $("status").textContent = message;
-  $("stage").textContent = stage;
-
-  $("progress").value = percent;
 }
 
-function addLog(message) {
-  const time = new Date().toLocaleTimeString();
-  $("log").textContent += `[${time}] ${message}\n`;
-  $("log").scrollTop = $("log").scrollHeight;
-}
+async function loadFFmpeg() {
+  if (ffmpeg?.loaded) return;
 
-function setIndeterminate(message, stage, percent = "—") {
-  $("progress").hidden = false;
-  $("progress").removeAttribute("value");
-  $("percent").textContent = percent;
-  $("status").textContent = message;
-  $("stage").textContent = stage;
-}
+  if (loading) throw new Error("La carga ya está en curso.");
 
-function resetProgress() {
-  $("progress").hidden = true;
-  $("percent").textContent = "";
-  $("status").textContent = "";
-  $("stage").textContent = "";
-  $("log").textContent = "";
+  loading = true;
+  $("retry").hidden = true;
+
+  try {
+    status(
+      "Descargando el procesador de video. La primera carga puede tardar.",
+      "Etapa 1 de 3 · Descargando FFmpeg"
+    );
+
+    ffmpeg = new FFmpeg();
+
+    // Archivos de la misma versión para evitar incompatibilidades.
+    const base =
+      "https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd/";
+
+    status(
+      "Preparando el motor de video...",
+      "Etapa 1 de 3 · Inicializando FFmpeg"
+    );
+
+    await ffmpeg.load({
+      coreURL: await toBlobURL(
+        base + "ffmpeg-core.js",
+        "text/javascript"
+      ),
+      wasmURL:
+        base + "ffmpeg-core.wasm"
+    });
+
+    status(
+      "Procesador listo.",
+      "Etapa 1 de 3 · Completada",
+      100
+    );
+
+  } finally {
+    loading = false;
+  }
 }
 
 $("video").addEventListener("change", async event => {
@@ -245,27 +220,16 @@ $("video").addEventListener("change", async event => {
 
   $("results").hidden = true;
   $("cut").disabled = true;
-  resetProgress();
+  $("retry").hidden = true;
 
-  $("status").textContent = "Leyendo información del video...";
-
-  const url = URL.createObjectURL(selectedFile);
-  $("preview").src = url;
+  $("preview").src = URL.createObjectURL(selectedFile);
   $("preview").hidden = false;
 
-  await new Promise((resolve, reject) => {
+  await new Promise(resolve => {
     $("preview").onloadedmetadata = resolve;
-    $("preview").onerror = reject;
-  }).catch(() => {
-    $("status").textContent = "No se pudo leer este video.";
   });
 
   duration = $("preview").duration;
-
-  if (!Number.isFinite(duration)) {
-    $("duration").textContent = "";
-    return;
-  }
 
   $("duration").textContent =
     `Duración: ${formatTime(duration)} · ` +
@@ -273,154 +237,101 @@ $("video").addEventListener("change", async event => {
 
   $("cut").disabled = false;
   $("status").textContent = "";
+  $("stage").textContent = "";
+  $("progress").hidden = true;
 });
 
-ffmpeg.on("log", ({ message }) => {
-  if (message) addLog(message);
-});
+$("retry").addEventListener("click", async () => {
+  $("retry").hidden = true;
+  $("cut").disabled = true;
 
-ffmpeg.on("progress", ({ progress }) => {
-  if (!currentTask || !Number.isFinite(progress)) return;
+  try {
+    await loadFFmpeg();
+    $("cut").disabled = false;
+  } catch (error) {
+    $("status").textContent =
+      "No se pudo cargar FFmpeg. Revisa tu conexión e inténtalo otra vez.";
 
-  const ratio = Math.max(0, Math.min(1, progress));
-
-  const overall =
-    currentTask.base +
-    ratio * currentTask.weight;
-
-  updateProgress(
-    overall,
-    `Codificando parte ${currentTask.index} de ${currentTask.total}...`,
-    `División del video · Parte ${currentTask.index}/${currentTask.total}`
-  );
+    $("retry").hidden = false;
+  }
 });
 
 $("cut").addEventListener("click", async () => {
+  if (busy || !selectedFile) return;
+
+  busy = true;
   $("cut").disabled = true;
   $("video").disabled = true;
   $("results").hidden = true;
 
-  resetProgress();
-  parts = [];
-  currentTask = null;
-
   try {
-    // 1. Cargar el procesador
-    if (!ffmpeg.loaded) {
-      setIndeterminate(
-        "Descargando y preparando el procesador de video. " +
-        "Esta etapa puede tardar la primera vez.",
-        "Etapa 1 de 4 · Preparando FFmpeg"
-      );
+    await loadFFmpeg();
 
-      addLog("Iniciando carga de FFmpeg...");
-
-      await ffmpeg.load({
-        coreURL: await toBlobURL(
-          "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js",
-          "text/javascript"
-        ),
-        wasmURL:
-          "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm"
-      });
-
-      addLog("Procesador de video listo.");
-    }
-
-    updateProgress(
-      10,
-      "Procesador listo.",
-      "Etapa 1 de 4 · Preparación completada"
+    status(
+      "Leyendo el archivo de video...",
+      "Etapa 2 de 3 · Preparando archivo",
+      0
     );
 
-    // 2. Preparar el archivo
-    setIndeterminate(
-      "Leyendo el video y preparándolo para dividirlo...",
-      "Etapa 2 de 4 · Preparando archivo"
+    await ffmpeg.writeFile(
+      "original.mp4",
+      await fetchFile(selectedFile)
     );
 
-    const input = "video_original";
-
-    const data = await fetchFile(selectedFile);
-
-    await ffmpeg.writeFile(input, data);
-
-    updateProgress(
-      15,
-      "Video preparado. Comenzando la división...",
-      "Etapa 2 de 4 · Archivo listo"
-    );
-
-    // 3. Dividir y codificar
     const total = Math.ceil(duration / 60);
+    const parts = [];
 
     for (let i = 0; i < total; i++) {
       const start = i * 60;
       const length = Math.min(60, duration - start);
 
-      const filename =
+      const name =
         `parte_${String(i + 1).padStart(2, "0")}.mp4`;
 
-      const base = 15 + (i / total) * 80;
-      const weight = 80 / total;
-
-      currentTask = {
-        index: i + 1,
-        total,
-        base,
-        weight
-      };
-
-      updateProgress(
-        base,
-        `Iniciando parte ${i + 1} de ${total}...`,
-        `Etapa 3 de 4 · División del video`
+      status(
+        `Procesando parte ${i + 1} de ${total}...`,
+        "Etapa 3 de 3 · Dividiendo video",
+        (i / total) * 100
       );
 
       await ffmpeg.exec([
         "-ss", String(start),
-        "-i", input,
+        "-i", "original.mp4",
         "-t", String(length),
         "-map", "0:v:0",
         "-map", "0:a:0?",
         "-c:v", "libx264",
         "-preset", "ultrafast",
-        "-crf", "18",
+        "-crf", "23",
         "-c:a", "aac",
-        "-b:a", "192k",
+        "-b:a", "128k",
         "-movflags", "+faststart",
-        "-avoid_negative_ts", "make_zero",
-        filename
+        name
       ]);
 
-      const output = await ffmpeg.readFile(filename);
+      const output = await ffmpeg.readFile(name);
 
-      parts.push({
-        name: filename,
-        data: output,
-        start,
-        duration: length
-      });
+      const blob = new Blob(
+        [output],
+        { type: "video/mp4" }
+      );
 
-      await ffmpeg.deleteFile(filename);
+      // Guardamos el clip como un objeto descargable.
+      const url = URL.createObjectURL(blob);
 
-      updateProgress(
-        base + weight,
+      parts.push({ name, url, duration: length });
+
+      // Liberamos el archivo temporal de FFmpeg.
+      await ffmpeg.deleteFile(name);
+
+      status(
         `Parte ${i + 1} de ${total} completada.`,
-        `Etapa 3 de 4 · ${i + 1}/${total} partes listas`
+        "Etapa 3 de 3 · Dividiendo video",
+        ((i + 1) / total) * 100
       );
     }
 
-    currentTask = null;
-
-    await ffmpeg.deleteFile(input);
-
-    // 4. Preparar resultados
-    updateProgress(
-      95,
-      "Generando los enlaces de descarga...",
-      "Etapa 4 de 4 · Preparando resultados"
-    );
+    await ffmpeg.deleteFile("original.mp4");
 
     $("summary").textContent =
       `${parts.length} partes · ${formatTime(duration)} en total`;
@@ -428,10 +339,6 @@ $("cut").addEventListener("click", async () => {
     $("parts").innerHTML = "";
 
     for (const part of parts) {
-      const url = URL.createObjectURL(
-        new Blob([part.data], { type: "video/mp4" })
-      );
-
       const div = document.createElement("div");
       div.className = "part";
 
@@ -440,9 +347,9 @@ $("cut").addEventListener("click", async () => {
         `${part.name} · ${formatTime(part.duration)}`;
 
       const link = document.createElement("a");
-      link.href = url;
+      link.href = part.url;
       link.download = part.name;
-      link.textContent = "Descargar video";
+      link.textContent = "Descargar parte";
 
       div.append(title, link);
       $("parts").appendChild(div);
@@ -450,79 +357,26 @@ $("cut").addEventListener("click", async () => {
 
     $("results").hidden = false;
 
-    updateProgress(
-      100,
-      "¡Proceso completado! Tus videos están listos.",
-      "Completado · Todas las partes generadas"
+    status(
+      "¡Video dividido correctamente!",
+      "Completado",
+      100
     );
-
-    addLog("Proceso terminado correctamente.");
 
   } catch (error) {
     console.error(error);
 
-    $("status").textContent =
-      "Ocurrió un error durante el procesamiento:\n" +
-      (error?.message || error);
+    status(
+      "Ocurrió un error: " + error.message,
+      "Proceso interrumpido"
+    );
 
-    $("stage").textContent = "Proceso interrumpido";
-    addLog("Error: " + (error?.message || error));
+    $("retry").hidden = false;
 
   } finally {
-    currentTask = null;
+    busy = false;
     $("cut").disabled = false;
     $("video").disabled = false;
-  }
-});
-
-$("downloadAll").addEventListener("click", async () => {
-  try {
-    $("downloadAll").disabled = true;
-
-    const zip = new JSZip();
-
-    for (const part of parts) {
-      zip.file(part.name, part.data);
-    }
-
-    updateProgress(
-      95,
-      "Comprimiendo los videos en un ZIP...",
-      "Preparando descarga"
-    );
-
-    const blob = await zip.generateAsync(
-      { type: "blob" },
-      metadata => {
-        updateProgress(
-          95 + metadata.percent * 0.05,
-          `Comprimiendo ZIP: ${Math.round(metadata.percent)}%`,
-          "Preparando descarga"
-        );
-      }
-    );
-
-    const url = URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "historias_divididas.zip";
-    link.click();
-
-    updateProgress(
-      100,
-      "ZIP listo. Revisa tus descargas.",
-      "Descarga preparada"
-    );
-
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-
-  } catch (error) {
-    $("status").textContent =
-      "No se pudo preparar el ZIP: " + error.message;
-
-  } finally {
-    $("downloadAll").disabled = false;
   }
 });
 </script>
