@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -28,17 +27,11 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
-main {
-  max-width: 600px;
-  margin: auto;
-}
+main { max-width: 600px; margin: auto; }
 
 h1 { font-size: 27px; margin-bottom: 8px; }
 
-p {
-  color: var(--muted);
-  line-height: 1.5;
-}
+p { color: var(--muted); line-height: 1.5; }
 
 .card {
   background: var(--card);
@@ -48,11 +41,7 @@ p {
   margin-top: 20px;
 }
 
-input[type=file] {
-  width: 100%;
-  margin: 18px 0;
-  color: var(--muted);
-}
+input[type=file] { width: 100%; margin: 18px 0; color: var(--muted); }
 
 button {
   background: var(--accent);
@@ -68,15 +57,21 @@ button {
   -webkit-appearance: none;
 }
 
-button:disabled {
-  opacity: .4;
-  cursor: not-allowed;
+button:disabled { opacity: .4; cursor: not-allowed; }
+
+button.secondary { background: #353541; color: white; }
+
+.option {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
 }
 
-button.secondary {
-  background: #353541;
-  color: white;
-}
+.option input { margin-top: 3px; }
 
 video {
   width: 100%;
@@ -92,11 +87,7 @@ progress {
   accent-color: var(--accent);
 }
 
-#stage {
-  color: var(--accent);
-  font-size: 13px;
-  margin-top: 15px;
-}
+#stage { color: var(--accent); font-size: 13px; margin-top: 15px; }
 
 #percent {
   display: block;
@@ -123,12 +114,9 @@ progress {
   overflow-wrap: anywhere;
 }
 
-.part {
-  border-top: 1px solid var(--border);
-  padding: 16px 0;
-}
-
+.part { border-top: 1px solid var(--border); padding: 16px 0; }
 .part strong { display: block; }
+.part .warn { color: #ffb86b; font-size: 12px; margin-top: 4px; }
 
 .part a {
   display: inline-block;
@@ -143,7 +131,6 @@ progress {
 #results { margin-bottom: 25px; }
 
 #retry { display: none; }
-
 </style>
 </head>
 
@@ -153,8 +140,8 @@ progress {
 <h1>✂️ Cortador de historias</h1>
 
 <p>
-Divide videos largos en clips de un minuto, manteniendo el orden
-y todo el contenido original. Optimizado para Safari en iPhone.
+Divide videos largos en clips de aproximadamente un minuto, manteniendo
+el orden y todo el contenido original. Optimizado para Safari en iPhone.
 </p>
 
 <section class="card">
@@ -166,6 +153,23 @@ y todo el contenido original. Optimizado para Safari en iPhone.
   <video id="preview" controls playsinline hidden></video>
 
   <p id="duration"></p>
+
+  <label class="option">
+    <input id="exact" type="checkbox">
+    <span>
+      Corte exacto de 59 s (lento, recodifica el video). Úsalo solo si el
+      modo rápido deja clips de más de 60 s.
+    </span>
+  </label>
+
+  <label class="option">
+    <input id="enhance" type="checkbox">
+    <span>
+      Mejorar calidad (muy lento): sube a 1080 px si el video es más
+      pequeño, afina la imagen y usa menos compresión. Fuerza el corte
+      exacto de 59 s.
+    </span>
+  </label>
 
   <button id="cut" disabled>Dividir video</button>
 
@@ -204,10 +208,6 @@ procesan localmente y no se envían a ningún servidor.
 
 <script type="module">
 
-// ------------------------------------
-// IMPORTAR LIBRERÍAS
-// ------------------------------------
-
 import { FFmpeg } from
 "https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js";
 
@@ -226,6 +226,16 @@ const PACKAGE =
 const CORE =
 "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm/";
 
+// Modo rápido: los cortes caen en el siguiente fotograma clave después
+// de este tiempo, así que cada clip dura un poco más que este valor.
+// Se deja margen bajo 60 s para absorber esa diferencia.
+const FAST_SEGMENT = 58;
+
+// Modo exacto: duración fija de cada clip (recodifica).
+const EXACT_SEGMENT = 59;
+
+const MAX_STORY = 60;
+
 let ffmpeg = null;
 let selectedFile = null;
 let duration = 0;
@@ -240,59 +250,52 @@ let workerBlobURL = null;
 // ------------------------------------
 
 function setProgress(percent, stage, message) {
-
   $("progress").hidden = false;
   $("progress").value = percent;
-
-  $("percent").textContent =
-    Math.round(percent) + "%";
-
+  $("percent").textContent = Math.round(percent) + "%";
   $("stage").textContent = stage;
   $("status").textContent = message;
 }
 
 function setLoading(stage, message) {
-
   $("progress").hidden = false;
   $("progress").removeAttribute("value");
-
   $("percent").textContent = "Cargando...";
   $("stage").textContent = stage;
   $("status").textContent = message;
 }
 
 function log(message) {
-
   const time = new Date().toLocaleTimeString();
-
-  $("log").textContent +=
-    `[${time}] ${message}\n`;
-
+  $("log").textContent += `[${time}] ${message}\n`;
   $("log").scrollTop = $("log").scrollHeight;
 }
 
 function getErrorMessage(error) {
-
   if (error instanceof Error) {
     return error.message || error.stack || String(error);
   }
-
-  if (typeof error === "string") {
-    return error;
-  }
-
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
+  if (typeof error === "string") return error;
+  try { return JSON.stringify(error); } catch { return String(error); }
 }
 
 function formatTime(seconds) {
-
   const s = Math.floor(seconds);
-
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+// Lee la duración real de un clip generado.
+function getVideoDuration(url) {
+  return new Promise(resolve => {
+    const v = document.createElement("video");
+    const done = value => { v.removeAttribute("src"); v.load(); resolve(value); };
+    v.preload = "metadata";
+    v.muted = true;
+    v.onloadedmetadata = () => done(v.duration);
+    v.onerror = () => done(NaN);
+    setTimeout(() => done(NaN), 8000);
+    v.src = url;
+  });
 }
 
 // ------------------------------------
@@ -306,9 +309,7 @@ async function createLocalWorker() {
     "Descargando el archivo del procesador..."
   );
 
-  const response = await fetch(
-    PACKAGE + "worker.js"
-  );
+  const response = await fetch(PACKAGE + "worker.js");
 
   if (!response.ok) {
     throw new Error(
@@ -318,19 +319,12 @@ async function createLocalWorker() {
 
   let source = await response.text();
 
-  // Reescribir importaciones relativas para que
-  // apunten al paquete oficial.
-
   source = source.replace(
     /((?:from|import)\s*)["']\.\/([^"']+)["']/g,
-    (_, prefix, filename) =>
-      `${prefix}"${PACKAGE}${filename}"`
+    (_, prefix, filename) => `${prefix}"${PACKAGE}${filename}"`
   );
 
-  const blob = new Blob(
-    [source],
-    { type: "text/javascript" }
-  );
+  const blob = new Blob([source], { type: "text/javascript" });
 
   workerBlobURL = URL.createObjectURL(blob);
 
@@ -357,11 +351,7 @@ async function loadFFmpeg() {
 
     log("Comenzando carga de FFmpeg.");
 
-    // 1. Preparar Worker local
-
     await createLocalWorker();
-
-    // 2. Preparar núcleo ESM
 
     setProgress(
       80,
@@ -369,11 +359,7 @@ async function loadFFmpeg() {
       "Conectando con el núcleo de FFmpeg..."
     );
 
-    log("Utilizando núcleo ESM de FFmpeg.");
-
     log("Origen del núcleo: " + CORE);
-
-    // 3. Inicializar FFmpeg
 
     setProgress(
       88,
@@ -384,24 +370,13 @@ async function loadFFmpeg() {
     ffmpeg = new FFmpeg();
 
     ffmpeg.on("log", ({ message }) => {
-
-      if (message) {
-        log(message);
-      }
-
+      if (message) log(message);
     });
 
-    // Cargar directamente los archivos ESM.
-    // Evitamos crear Blob URLs para el núcleo.
-
     await ffmpeg.load({
-
       classWorkerURL: workerBlobURL,
-
       coreURL: CORE + "ffmpeg-core.js",
-
       wasmURL: CORE + "ffmpeg-core.wasm"
-
     });
 
     setProgress(
@@ -416,9 +391,7 @@ async function loadFFmpeg() {
 
     ffmpeg = null;
 
-    const message = getErrorMessage(error);
-
-    log("ERROR AL CARGAR FFMPEG: " + message);
+    log("ERROR AL CARGAR FFMPEG: " + getErrorMessage(error));
 
     throw error;
 
@@ -453,29 +426,25 @@ $("video").addEventListener("change", async event => {
   try {
 
     await new Promise((resolve, reject) => {
-
       $("preview").onloadedmetadata = resolve;
       $("preview").onerror = reject;
-
     });
 
     duration = $("preview").duration;
 
     $("duration").textContent =
       `Duración: ${formatTime(duration)} · ` +
-      `${Math.ceil(duration / 60)} partes`;
+      `${Math.ceil(duration / FAST_SEGMENT)} partes aprox.`;
 
     $("cut").disabled = false;
 
-    $("status").textContent =
-      "Video cargado correctamente.";
+    $("status").textContent = "Video cargado correctamente.";
 
     $("stage").textContent = "";
 
   } catch {
 
-    $("status").textContent =
-      "No se pudo leer el video.";
+    $("status").textContent = "No se pudo leer el video.";
 
   }
 
@@ -500,8 +469,7 @@ $("retry").addEventListener("click", async () => {
 
     const message = getErrorMessage(error);
 
-    $("status").textContent =
-      "Error al cargar FFmpeg:\n" + message;
+    $("status").textContent = "Error al cargar FFmpeg:\n" + message;
 
     $("retry").style.display = "block";
 
@@ -510,6 +478,171 @@ $("retry").addEventListener("click", async () => {
   }
 
 });
+
+// ------------------------------------
+// MODO RÁPIDO: copia sin recodificar
+// ------------------------------------
+
+async function splitFast(input) {
+
+  // Detectar el códec para que los clips HEVC (iPhone) se reproduzcan en Apple.
+  let probe = "";
+  const collect = ({ message }) => { probe += message + "\n"; };
+
+  ffmpeg.on("log", collect);
+  try {
+    await ffmpeg.exec(["-i", input]); // termina con error a propósito, solo lee info
+  } catch {}
+  ffmpeg.off("log", collect);
+
+  const isHevc = /Video:\s*(hevc|h265)/i.test(probe);
+
+  log(isHevc ? "Códec detectado: HEVC" : "Códec detectado: no HEVC");
+
+  const progressHandler = ({ progress }) => {
+    if (!Number.isFinite(progress)) return;
+    const ratio = Math.max(0, Math.min(1, progress));
+    setProgress(
+      10 + ratio * 80,
+      "Etapa 3 · Cortando",
+      "Dividiendo sin recodificar..."
+    );
+  };
+
+  ffmpeg.on("progress", progressHandler);
+
+  try {
+
+    const exitCode = await ffmpeg.exec([
+      "-i", input,
+      "-map", "0:v:0",
+      "-map", "0:a:0?",
+      "-c", "copy",
+      ...(isHevc ? ["-tag:v", "hvc1"] : []),
+      "-f", "segment",
+      "-segment_time", String(FAST_SEGMENT),
+      "-segment_start_number", "1",
+      "-reset_timestamps", "1",
+      "-segment_format", "mp4",
+      "-segment_format_options", "movflags=+faststart",
+      "parte_%02d.mp4"
+    ]);
+
+    if (exitCode !== 0) {
+      throw new Error("Falló el corte rápido del video.");
+    }
+
+  } finally {
+
+    ffmpeg.off("progress", progressHandler);
+
+  }
+
+  const entries = await ffmpeg.listDir("/");
+
+  return entries
+    .map(e => e.name)
+    .filter(name => /^parte_\d+\.mp4$/.test(name))
+    .sort();
+}
+
+// ------------------------------------
+// MODO EXACTO: recodifica clips de 59 s
+// ------------------------------------
+
+function buildEnhanceFilter() {
+
+  const w = $("preview").videoWidth;
+  const h = $("preview").videoHeight;
+  const filters = [];
+
+  // Subir solo si el lado corto es menor a 1080 (nunca reducir).
+  if (w && h && Math.min(w, h) < 1080) {
+    filters.push(
+      w <= h
+        ? "scale=1080:-2:flags=lanczos"
+        : "scale=-2:1080:flags=lanczos"
+    );
+  }
+
+  // Afinado suave: realza detalle sin crear halos.
+  filters.push("unsharp=3:3:0.6:3:3:0.0");
+
+  filters.push("format=yuv420p");
+
+  return filters.join(",");
+}
+
+async function splitExact(input, enhance = false) {
+
+  const total = Math.ceil(duration / EXACT_SEGMENT);
+  const names = [];
+
+  for (let i = 0; i < total; i++) {
+
+    const start = i * EXACT_SEGMENT;
+    const length = Math.min(EXACT_SEGMENT, duration - start);
+    const filename = `parte_${String(i + 1).padStart(2, "0")}.mp4`;
+
+    const base = 10 + (i / total) * 80;
+    const weight = 80 / total;
+
+    setProgress(
+      base,
+      `Etapa 3 · Parte ${i + 1} de ${total}`,
+      `Codificando desde ${formatTime(start)}...`
+    );
+
+    const progressHandler = ({ progress }) => {
+      if (!Number.isFinite(progress)) return;
+      const ratio = Math.max(0, Math.min(1, progress));
+      setProgress(
+        base + ratio * weight,
+        `Etapa 3 · Parte ${i + 1} de ${total}`,
+        `Codificando parte ${i + 1}...`
+      );
+    };
+
+    ffmpeg.on("progress", progressHandler);
+
+    try {
+
+      // -ss ANTES de -i: salta directo al punto en vez de decodificar
+      // todo lo anterior (antes cada parte tardaba más que la anterior).
+      const exitCode = await ffmpeg.exec([
+        "-ss", String(start),
+        "-i", input,
+        "-t", String(length),
+        "-map", "0:v:0",
+        "-map", "0:a:0?",
+        ...(enhance ? ["-vf", buildEnhanceFilter()] : []),
+        "-c:v", "libx264",
+        "-preset", enhance ? "veryfast" : "ultrafast",
+        "-crf", enhance ? "18" : "23",
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "-movflags", "+faststart",
+        filename
+      ]);
+
+      if (exitCode !== 0) {
+        throw new Error(`Falló la codificación de la parte ${i + 1}.`);
+      }
+
+    } finally {
+
+      ffmpeg.off("progress", progressHandler);
+
+    }
+
+    names.push(filename);
+
+    // Para no acumular todo en memoria, se lee y borra de inmediato
+    // en la fase de resultados; aquí solo se guarda el nombre.
+  }
+
+  return names;
+}
 
 // ------------------------------------
 // DIVIDIR VIDEO
@@ -523,10 +656,10 @@ $("cut").addEventListener("click", async () => {
 
   $("cut").disabled = true;
   $("video").disabled = true;
+  $("exact").disabled = true;
+  $("enhance").disabled = true;
   $("results").hidden = true;
   $("retry").style.display = "none";
-
-  // Liberar enlaces de resultados anteriores
 
   outputURLs.forEach(url => URL.revokeObjectURL(url));
   outputURLs = [];
@@ -534,193 +667,132 @@ $("cut").addEventListener("click", async () => {
   $("parts").innerHTML = "";
   $("log").textContent = "";
 
-  try {
+  let mounted = false;
+  let input = null;
+  let wroteFile = false;
 
-    // 1. Cargar procesador
+  try {
 
     await loadFFmpeg();
 
-    // 2. Preparar archivo
+    setProgress(0, "Etapa 2 · Preparando video", "Leyendo archivo...");
 
-    setProgress(
-      0,
-      "Etapa 2 · Preparando video",
-      "Leyendo archivo..."
-    );
+    // Montar el archivo directamente (sin copiarlo entero a memoria).
+    // Si el navegador no lo permite, se copia como antes.
+    try {
 
-    const extension =
-      selectedFile.name.split(".").pop().toLowerCase()
-        .replace(/[^a-z0-9]/g, "") || "mp4";
+      try { await ffmpeg.createDir("/in"); } catch {}
 
-    const input = `original.${extension}`;
+      await ffmpeg.mount("WORKERFS", { files: [selectedFile] }, "/in");
 
-    const fileData = await fetchFile(selectedFile);
+      mounted = true;
+      input = "/in/" + selectedFile.name;
 
-    setProgress(
-      5,
-      "Etapa 2 · Preparando video",
-      "Copiando video al procesador..."
-    );
+      log("Archivo montado sin copiarlo a memoria.");
 
-    await ffmpeg.writeFile(input, fileData);
+    } catch (mountError) {
 
-    log("Archivo cargado en FFmpeg.");
+      log("No se pudo montar el archivo, se copiará: " +
+          getErrorMessage(mountError));
 
-    // 3. Dividir en segmentos de 60 segundos
+      const extension =
+        selectedFile.name.split(".").pop().toLowerCase()
+          .replace(/[^a-z0-9]/g, "") || "mp4";
 
-    const total = Math.ceil(duration / 60);
+      input = `original.${extension}`;
+
+      setProgress(5, "Etapa 2 · Preparando video",
+                  "Copiando video al procesador...");
+
+      await ffmpeg.writeFile(input, await fetchFile(selectedFile));
+
+      wroteFile = true;
+    }
+
+    setProgress(10, "Etapa 3 · Cortando", "Iniciando corte...");
+
+    const enhance = $("enhance").checked;
+    const exact = $("exact").checked || enhance;
+
+    if (enhance) log("Filtro de mejora: " + buildEnhanceFilter());
+
+    const names = exact
+      ? await splitExact(input, enhance)
+      : await splitFast(input);
+
+    if (!names.length) {
+      throw new Error("No se generó ningún clip.");
+    }
+
+    // Leer resultados
 
     const parts = [];
 
-    for (let i = 0; i < total; i++) {
-
-      const start = i * 60;
-
-      const length = Math.min(
-        60,
-        duration - start
-      );
-
-      const filename =
-        `parte_${String(i + 1).padStart(2, "0")}.mp4`;
-
-      const base = (i / total) * 100;
-      const weight = 100 / total;
+    for (let i = 0; i < names.length; i++) {
 
       setProgress(
-        base,
-        `Etapa 3 · Parte ${i + 1} de ${total}`,
-        `Procesando desde ${formatTime(start)} · Duración ${formatTime(length)}`
+        90 + (i / names.length) * 10,
+        "Etapa 4 · Preparando descargas",
+        `Leyendo clip ${i + 1} de ${names.length}...`
       );
 
-      // Progreso de codificación
+      const output = await ffmpeg.readFile(names[i]);
 
-      const progressHandler = ({ progress }) => {
-
-        if (!Number.isFinite(progress)) return;
-
-        const ratio = Math.max(
-          0,
-          Math.min(1, progress)
-        );
-
-        setProgress(
-          base + ratio * weight,
-          `Etapa 3 · Parte ${i + 1} de ${total}`,
-          `Codificando parte ${i + 1}...`
-        );
-
-      };
-
-      ffmpeg.on("progress", progressHandler);
-
-      try {
-
-        const exitCode = await ffmpeg.exec([
-
-          "-i", input,
-
-          "-ss", String(start),
-
-          "-t", String(length),
-
-          "-map", "0:v:0",
-
-          "-map", "0:a:0?",
-
-          "-c:v", "libx264",
-
-          "-preset", "ultrafast",
-
-          "-crf", "23",
-
-          "-c:a", "aac",
-
-          "-b:a", "128k",
-
-          "-movflags", "+faststart",
-
-          filename
-
-        ]);
-
-        if (exitCode !== 0) {
-          throw new Error(
-            `Falló la codificación de la parte ${i + 1}.`
-          );
-        }
-
-      } finally {
-
-        ffmpeg.off("progress", progressHandler);
-
-      }
-
-      const output = await ffmpeg.readFile(filename);
-
-      const blob = new Blob(
-        [output],
-        { type: "video/mp4" }
+      const url = URL.createObjectURL(
+        new Blob([output], { type: "video/mp4" })
       );
-
-      const url = URL.createObjectURL(blob);
 
       outputURLs.push(url);
 
       parts.push({
-        name: filename,
+        name: names[i],
         url,
-        duration: length
+        duration: await getVideoDuration(url)
       });
 
-      await ffmpeg.deleteFile(filename);
-
-      setProgress(
-        ((i + 1) / total) * 100,
-        `Etapa 3 · Parte ${i + 1} de ${total}`,
-        `Parte ${i + 1} completada correctamente.`
-      );
-
-      log(`Generada ${filename}`);
-
+      await ffmpeg.deleteFile(names[i]);
     }
 
-    // 4. Liberar archivo original de memoria
+    if (wroteFile) await ffmpeg.deleteFile(input);
 
-    await ffmpeg.deleteFile(input);
+    setProgress(100, "Etapa 4 · Finalizado", "¡Todos los videos están listos!");
 
-    // 5. Mostrar descargas
-
-    setProgress(
-      100,
-      "Etapa 4 · Finalizado",
-      "¡Todos los videos están listos!"
-    );
+    const long = parts.filter(p => p.duration > MAX_STORY);
 
     $("summary").textContent =
-      `${parts.length} clips generados · ${formatTime(duration)} en total.`;
+      `${parts.length} clips generados · ${formatTime(duration)} en total.` +
+      (long.length
+        ? `\n${long.length} clip(s) superan 60 s. Activa "Corte exacto" y repite.`
+        : "");
 
     for (const part of parts) {
 
       const div = document.createElement("div");
-
       div.className = "part";
 
       const title = document.createElement("strong");
 
-      title.textContent =
-        `${part.name} · ${formatTime(part.duration)}`;
+      title.textContent = Number.isFinite(part.duration)
+        ? `${part.name} · ${part.duration.toFixed(1)} s`
+        : part.name;
 
       const link = document.createElement("a");
-
       link.href = part.url;
       link.download = part.name;
       link.textContent = "⬇ Descargar video";
 
-      div.append(title, link);
+      div.append(title);
+
+      if (part.duration > MAX_STORY) {
+        const warn = document.createElement("div");
+        warn.className = "warn";
+        warn.textContent = "Dura más de 60 s: Instagram podría recortarlo.";
+        div.append(warn);
+      }
+
+      div.append(link);
 
       $("parts").appendChild(div);
-
     }
 
     $("results").hidden = false;
@@ -733,11 +805,8 @@ $("cut").addEventListener("click", async () => {
 
     const message = getErrorMessage(error);
 
-    $("status").textContent =
-      "Ocurrió un error:\n" + message;
-
-    $("stage").textContent =
-      "Proceso interrumpido";
+    $("status").textContent = "Ocurrió un error:\n" + message;
+    $("stage").textContent = "Proceso interrumpido";
 
     $("retry").style.display = "block";
 
@@ -745,10 +814,16 @@ $("cut").addEventListener("click", async () => {
 
   } finally {
 
+    if (mounted) {
+      try { await ffmpeg.unmount("/in"); } catch {}
+    }
+
     busy = false;
 
     $("cut").disabled = false;
     $("video").disabled = false;
+    $("exact").disabled = false;
+    $("enhance").disabled = false;
 
   }
 
@@ -759,13 +834,8 @@ $("cut").addEventListener("click", async () => {
 // ------------------------------------
 
 window.addEventListener("pagehide", () => {
-
   outputURLs.forEach(url => URL.revokeObjectURL(url));
-
-  if (workerBlobURL) {
-    URL.revokeObjectURL(workerBlobURL);
-  }
-
+  if (workerBlobURL) URL.revokeObjectURL(workerBlobURL);
 });
 
 </script>
